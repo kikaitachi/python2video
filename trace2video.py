@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-import os
-from time import *
 from subprocess import *
 from sys import *
 from pygments import highlight
@@ -9,29 +7,16 @@ from pygments.lexers import PythonLexer
 from pygments.formatters import ImageFormatter
 from PIL import Image, ImageDraw, ImageFont
 
-fileName = argv[1]
+programFileName = argv[1]
+videoFileName = argv[1].split('.')[0] + '.mp4'
 frameDirName = 'frames'
 fps = 30
 fadeFrames = 20
-startTime = clock_gettime(CLOCK_MONOTONIC)
 executionStats = []
 
-# unbuffer (part of expect package) allows pipe from subprocess without any buffering for real-time reading
-process = Popen(['unbuffer', 'python3', '-m', 'trace', '-t', fileName], bufsize=0, encoding='utf8', stderr=STDOUT, stdout=PIPE)
-while True:
-    line = process.stdout.readline()
-    if line:
-        if line.startswith(fileName):
-            parenOpenIndex = line.find('(')
-            if parenOpenIndex != -1:
-                parenCloseIndex = line.find(')', parenOpenIndex + 1)
-                now = clock_gettime(CLOCK_MONOTONIC)
-                lineNumber = int(line[parenOpenIndex + 1:parenCloseIndex])
-                secondsFromStart = now - startTime
-                executionStats.append((secondsFromStart, lineNumber))
-                print(str(secondsFromStart) + ': executing line ' + str(lineNumber))
-    else:
-        break
+for line in stdin:
+    values = line.split(',')
+    executionStats.append((float(values[0]), int(values[1])))
 
 class FadingLinesImageFormatter(ImageFormatter):
     def __init__(self, **options):
@@ -64,9 +49,9 @@ class FadingLinesImageFormatter(ImageFormatter):
             draw.text(pos, value, font=font, **kw)
         im.save(outfile, self.image_format.upper())
 
-#run(['rm', '-rf', frameDirName])
-os.makedirs(os.path.join(frameDirName), exist_ok=True)
-with open(fileName, 'r') as file:
+run(['rm', '-rf', frameDirName])
+run(['mkdir', frameDirName])
+with open(programFileName, 'r') as file:
     code = file.read()
     frameNumber = 1
     executedLines = {}
@@ -84,4 +69,5 @@ with open(fileName, 'r') as file:
             image.write(highlight(code, PythonLexer(), FadingLinesImageFormatter(style='paraiso-dark', fade_lines=executedLines)))
         frameNumber = frameNumber + 1
 
-run(['ffmpeg', '-y', '-framerate', str(fps), '-pattern_type', 'glob', '-i', frameDirName + '/*.png', 'test.mp4'])
+run(['ffmpeg', '-y', '-framerate', str(fps), '-pattern_type', 'glob', '-i', frameDirName + '/*.png', videoFileName])
+run(['rm', '-rf', frameDirName])
